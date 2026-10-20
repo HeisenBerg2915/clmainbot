@@ -70,6 +70,46 @@ def _parse_api_keys(keys_config):
 
 
 
+
+
+
+
+
+
+async def get_imdb_poster(movie_name):
+    if not IMDBIO_AVAILABLE: return None
+    try:
+        query = movie_name.strip()
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', query)
+        year = year_match.group(1) if year_match else None
+        title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
+        normalize = lambda s: re.sub(r'[^a-z0-9]', '', str(s or '').lower())
+        if not title: return None
+        result = await asyncio.wait_for(asyncio.to_thread(_imdbio.search_title, title, year=year), timeout=5)
+        if not result or not result.titles: return None
+        for item in result.titles[:10]:
+            if normalize(item.title) != normalize(title): continue
+            if year and str(item.year or '')[:4] != year: continue
+            movie = await asyncio.wait_for(asyncio.to_thread(_imdbio.get_movie, item.imdb_id), timeout=5)
+            if not movie: continue
+            for key in ('poster', 'poster_url', 'image', 'image_url', 'primary_image'):
+                value = getattr(movie, key, None)
+                if isinstance(value, dict): value = value.get('url') or value.get('imageUrl')
+                if isinstance(value, str) and value.startswith('http'): return _hq_poster(value)
+        return None
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.warning(f"IMDb poster fetch failed: {e}")
+        return None
+
+
+
+
+
+
+
+
 async def get_tmdb_poster(movie_name, tmdb_api_key):
     try:
         query = movie_name.strip()
@@ -175,44 +215,63 @@ async def get_omdb_poster(movie_name, omdb_api_key):
 
 
 
+
+
+
 async def get_any_movie_poster(movie_name):
     cached_poster = await get_cached_poster(movie_name)
-    if cached_poster:
-        return cached_poster
+    if cached_poster: return cached_poster
 
+    try:
+        poster = await asyncio.wait_for(get_imdb_poster(movie_name), timeout=7)
+        if poster:
+            await save_poster_to_cache(movie_name, poster)
+            return poster
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.warning(f"IMDb poster error: {e}")
+
+    current_time = time.time()
     tmdb_keys = _parse_api_keys(TMDB_API_KEYS)
     omdb_keys = _parse_api_keys(OMDB_API_KEYS)
-    current_time = time.time()
 
-    if tmdb_keys:
-        valid_tmdb_keys = [k for k in tmdb_keys if k not in BAD_TMDB_KEYS or current_time - BAD_TMDB_KEYS[k] > 300]
-        if valid_tmdb_keys:
-            chosen_key = random.choice(valid_tmdb_keys)
-            try:
-                poster = await asyncio.wait_for(get_tmdb_poster(movie_name, chosen_key), timeout=3.0)
-                if poster:
-                    await save_poster_to_cache(movie_name, poster)
-                    return poster
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                BAD_TMDB_KEYS[chosen_key] = current_time
+    valid_tmdb = [k for k in tmdb_keys if k not in BAD_TMDB_KEYS or current_time - BAD_TMDB_KEYS[k] > 300]
+    if valid_tmdb:
+        key = random.choice(valid_tmdb)
+        try:
+            poster = await asyncio.wait_for(get_tmdb_poster(movie_name, key), timeout=5)
+            if poster:
+                await save_poster_to_cache(movie_name, poster)
+                return poster
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            BAD_TMDB_KEYS[key] = current_time
 
-    if omdb_keys:
-        valid_omdb_keys = [k for k in omdb_keys if k not in BAD_OMDB_KEYS or current_time - BAD_OMDB_KEYS[k] > 300]
-        if valid_omdb_keys:
-            chosen_key = random.choice(valid_omdb_keys)
-            try:
-                poster = await asyncio.wait_for(get_omdb_poster(movie_name, chosen_key), timeout=3.0)
-                if poster:
-                    await save_poster_to_cache(movie_name, poster)
-                    return poster
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                BAD_OMDB_KEYS[chosen_key] = current_time
+    valid_omdb = [k for k in omdb_keys if k not in BAD_OMDB_KEYS or current_time - BAD_OMDB_KEYS[k] > 300]
+    if valid_omdb:
+        key = random.choice(valid_omdb)
+        try:
+            poster = await asyncio.wait_for(get_omdb_poster(movie_name, key), timeout=5)
+            if poster:
+                await save_poster_to_cache(movie_name, poster)
+                return poster
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            BAD_OMDB_KEYS[key] = current_time
 
     return None
+
+
+
+
+
+
+
+
+
 
 
 async def check_loop_sub(client, message):
