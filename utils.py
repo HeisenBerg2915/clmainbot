@@ -68,48 +68,6 @@ def _parse_api_keys(keys_config):
     return keys_config or []
 
 
-
-
-
-
-
-
-
-
-async def get_imdb_poster(movie_name):
-    if not IMDBIO_AVAILABLE: return None
-    try:
-        query = movie_name.strip()
-        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', query)
-        year = year_match.group(1) if year_match else None
-        title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
-        normalize = lambda s: re.sub(r'[^a-z0-9]', '', str(s or '').lower())
-        if not title: return None
-        result = await asyncio.wait_for(asyncio.to_thread(_imdbio.search_title, title, year=year), timeout=10)
-        if not result or not result.titles: return None
-        for item in result.titles[:10]:
-            if normalize(item.title) != normalize(title): continue
-            if year and str(item.year or '')[:4] != year: continue
-            movie = await asyncio.wait_for(asyncio.to_thread(_imdbio.get_movie, item.imdb_id), timeout=10)
-            if not movie: continue
-            for key in ('poster', 'poster_url', 'image', 'image_url', 'primary_image'):
-                value = getattr(movie, key, None)
-                if isinstance(value, dict): value = value.get('url') or value.get('imageUrl')
-                if isinstance(value, str) and value.startswith('http'): return _hq_poster(value)
-        return None
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        logger.warning(f"IMDb poster fetch failed: {e}")
-        return None
-
-
-
-
-
-
-
-
 async def get_tmdb_poster(movie_name, tmdb_api_key):
     try:
         query = movie_name.strip()
