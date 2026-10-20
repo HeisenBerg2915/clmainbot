@@ -78,8 +78,7 @@ async def get_tmdb_poster(movie_name, tmdb_api_key):
         title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
         normalize = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
         target = normalize(title)
-        if not target:
-            return None
+        if not target: return None
 
         headers = {"Accept": "application/json"}
         timeout = aiohttp.ClientTimeout(total=5)
@@ -88,53 +87,40 @@ async def get_tmdb_poster(movie_name, tmdb_api_key):
             url = "https://api.themoviedb.org/3/search/multi"
             params = {"api_key": tmdb_api_key, "query": title, "include_adult": "false"}
             async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    return None
+                if response.status != 200: return None
                 data = await response.json()
 
             matches = []
             for item in data.get("results", []):
                 kind = item.get("media_type")
-                if kind not in ("movie", "tv"):
-                    continue
+                if kind not in ("movie", "tv"): continue
                 names = [item.get("title"), item.get("original_title")] if kind == "movie" else [item.get("name"), item.get("original_name")]
-                if not any(normalize(name) == target for name in names if name):
-                    continue
+                if not any(normalize(name) == target for name in names if name): continue
                 date = item.get("release_date") or item.get("first_air_date") or ""
-                if year and date[:4] != year:
-                    continue
+                if year and date[:4] != year: continue
                 matches.append(item)
 
-            if not matches:
-                return None
+            if not matches: return None
+            matches.sort(key=lambda x: (bool(x.get("poster_path")), float(x.get("vote_average") or 0), int(x.get("vote_count") or 0)), reverse=True)
 
-            matches.sort(key=lambda x: (
-                bool(x.get("backdrop_path")),
-                float(x.get("vote_average") or 0),
-                int(x.get("vote_count") or 0)
-            ), reverse=True)
+            for movie in matches:
+                path = movie.get("poster_path")
+                if path: return f"https://image.tmdb.org/t/p/original{path}"
 
             for movie in matches:
                 path = movie.get("backdrop_path")
-                if path:
-                    return f"https://image.tmdb.org/t/p/original{path}"
+                if path: return f"https://image.tmdb.org/t/p/original{path}"
 
-                path = movie.get("poster_path")
-                if path:
-                    return f"https://image.tmdb.org/t/p/original{path}"
-
-                kind = movie.get("media_type")
-                media_id = movie.get("id")
+                kind, media_id = movie.get("media_type"), movie.get("id")
                 if kind and media_id:
                     endpoint = f"https://api.themoviedb.org/3/{kind}/{media_id}/images"
                     async with session.get(endpoint, params={"api_key": tmdb_api_key}) as response:
-                        if response.status == 200:
-                            images = await response.json()
-                            backdrops = images.get("backdrops", [])
-                            backdrops.sort(key=lambda x: float(x.get("vote_average") or 0), reverse=True)
-                            if backdrops and backdrops[0].get("file_path"):
-                                return f"https://image.tmdb.org/t/p/original{backdrops[0]['file_path']}"
-
+                        if response.status != 200: continue
+                        images = await response.json()
+                    backdrops = images.get("backdrops", [])
+                    backdrops.sort(key=lambda x: float(x.get("vote_average") or 0), reverse=True)
+                    if backdrops and backdrops[0].get("file_path"):
+                        return f"https://image.tmdb.org/t/p/original{backdrops[0]['file_path']}"
             return None
     except asyncio.CancelledError:
         raise
