@@ -93,7 +93,7 @@ async def get_imdb_poster(movie_name):
             return None
 
         return await asyncio.wait_for(
-            asyncio.to_thread(search_movie), timeout=5
+            asyncio.to_thread(search_movie), timeout=10
         )
     except asyncio.CancelledError:
         raise
