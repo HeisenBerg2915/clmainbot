@@ -85,12 +85,12 @@ async def get_imdb_poster(movie_name):
         title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
         normalize = lambda s: re.sub(r'[^a-z0-9]', '', str(s or '').lower())
         if not title: return None
-        result = await asyncio.wait_for(asyncio.to_thread(_imdbio.search_title, title, year=year), timeout=5)
+        result = await asyncio.wait_for(asyncio.to_thread(_imdbio.search_title, title, year=year), timeout=10)
         if not result or not result.titles: return None
         for item in result.titles[:10]:
             if normalize(item.title) != normalize(title): continue
             if year and str(item.year or '')[:4] != year: continue
-            movie = await asyncio.wait_for(asyncio.to_thread(_imdbio.get_movie, item.imdb_id), timeout=5)
+            movie = await asyncio.wait_for(asyncio.to_thread(_imdbio.get_movie, item.imdb_id), timeout=10)
             if not movie: continue
             for key in ('poster', 'poster_url', 'image', 'image_url', 'primary_image'):
                 value = getattr(movie, key, None)
