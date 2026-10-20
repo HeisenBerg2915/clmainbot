@@ -75,7 +75,7 @@ class temp(object):
 import re
 
 from imdb import Cinemagoer
-ia = Cinemagoer()
+ia = Cinemagoer('http')
 
 def fetch_movie_details(movie_name):
     try:
