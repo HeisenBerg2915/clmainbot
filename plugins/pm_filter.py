@@ -937,7 +937,7 @@ async def auto_filter(client, msg, spoll=False):
     reply_markup = InlineKeyboardMarkup(btn)
 
     try:
-        poster = await asyncio.wait_for(fetch_movie_details(search), timeout=7))
+        poster = await asyncio.wait_for(fetch_movie_details(search), timeout=7)
     except Exception:
         poster = None
 
