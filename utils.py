@@ -70,6 +70,53 @@ def _parse_api_keys(keys_config):
 
 
 
+async def get_imdb_poster(movie_name):
+    try:
+        import aiohttp, json, re
+        from bs4 import BeautifulSoup
+
+        query = movie_name.strip()
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', query)
+        year = year_match.group(1) if year_match else None
+        title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
+        normalize = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
+        if not title: return None
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+        timeout = aiohttp.ClientTimeout(total=8)
+
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.get("https://www.imdb.com/find/", params={"q": title, "s": "tt"}) as r:
+                if r.status != 200: return None
+                soup = BeautifulSoup(await r.text(), "html.parser")
+
+            for item in soup.select("a.ipc-metadata-list-summary-item__t"):
+                if normalize(item.get_text(" ", strip=True)) != normalize(title): continue
+                href = item.get("href", "")
+                match = re.search(r'/title/(tt\d+)', href)
+                if not match: continue
+
+                movie_url = f"https://www.imdb.com/title/{match.group(1)}/"
+                async with session.get(movie_url) as r:
+                    if r.status != 200: continue
+                    page = await r.text()
+
+                movie_soup = BeautifulSoup(page, "html.parser")
+                for script in movie_soup.select('script[type="application/ld+json"]'):
+                    try:
+                        data = json.loads(script.string or script.get_text())
+                        if year and str(data.get("datePublished", ""))[:4] != year: continue
+                        poster = data.get("image")
+                        if isinstance(poster, str) and poster.startswith("http"): return poster
+                    except (ValueError, TypeError):
+                        continue
+        return None
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return None
+
+
 async def get_tmdb_poster(movie_name, tmdb_api_key):
     try:
         query = movie_name.strip()
