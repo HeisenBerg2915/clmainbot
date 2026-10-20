@@ -14,6 +14,9 @@ from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait,
 from pyrogram.types import Message, InlineKeyboardButton
 from pyrogram import enums
 
+
+
+
 # Database and Project Configurations
 from database.users_chats_db import db
 from database.postersave import get_cached_poster, save_poster_to_cache
@@ -58,6 +61,64 @@ class temp(object):
     U_NAME = None
     B_NAME = None
     SETTINGS = {}
+
+
+
+
+
+
+
+
+
+
+
+import re
+
+from imdb import Cinemagoer
+ia = Cinemagoer()
+
+def fetch_movie_details(movie_name):
+    try:
+        query = movie_name.strip()
+        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', query)
+        year = int(year_match.group(1)) if year_match else None
+        title_query = re.sub(r'\b(19\d{2}|20\d{2})\b', '', query).strip()
+
+        results = ia.search_movie(title_query)
+        if not results:
+            return None
+
+        movie = None
+        for result in results:
+            result_title = result.get('title', '').strip().casefold()
+            result_year = result.get('year')
+            if result_title == title_query.casefold() and (not year or result_year == year):
+                movie = result
+                break
+
+        if not movie:
+            for result in results:
+                if not year or result.get('year') == year:
+                    movie = result
+                    break
+
+        if not movie:
+            return None
+
+        details = ia.get_movie(movie.movieID)
+        poster_url = details.get('full-size cover url') or details.get('cover url')
+        cast = details.get('cast', [])
+        actors = ', '.join(str(actor.get('name', '')) for actor in cast[:3])
+
+        return {
+            'title': details.get('title', movie.get('title', 'Unknown')),
+            'year': details.get('year', movie.get('year', 'Unknown')),
+            'actors': actors or 'Unknown',
+            'poster_url': poster_url
+        }
+    except Exception as e:
+        print(f"Error in fetch_movie_details: {e}")
+        return None
 
 
 
