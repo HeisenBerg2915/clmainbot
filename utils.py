@@ -80,7 +80,7 @@ async def get_imdb_poster(movie_name):
         def search_movie():
             return _imdbio.search_title(title, year=year)
 
-        results = await asyncio.wait_for(asyncio.to_thread(search_movie), timeout=5)
+        results = await asyncio.wait_for(asyncio.to_thread(search_movie), timeout=10)
         if not results: return None
 
         def normalize(s):
