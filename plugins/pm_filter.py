@@ -24,7 +24,7 @@ from database.filters_mdb import del_all
 from info import ADMINS, REQ_CHANNEL1, REQ_CHANNEL2, AUTH_USERS, CUSTOM_FILE_CAPTION, AUTH_GROUPS, P_TTI_SHOW_OFF, SINGLE_BUTTON, SPELL_CHECK_REPLY, LOG_CHANNEL, SPELL_IMG, DATABASE_NAME, YEAR_IMG
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram import Client, filters, enums
-from utils import get_size, is_subscribed, temp, get_settings, save_group_settings, is_requested_one, is_requested_two, get_any_movie_poster, get_poster
+from utils import get_size, is_subscribed, temp, get_settings, save_group_settings, is_requested_one, is_requested_two, get_any_movie_poster, get_poster, get_omdb_poster
 from database.users_chats_db import db
 # Mediaa, clientDB3 എന്നിവ ഒഴിവാക്കി
 # 🚀 ia_filterdb-ൽ നിന്ന് db1 (clientDB2) ഒഴിവാക്കി മെയിൻ db (clientDB) മാത്രം ഇമ്പോർട്ട് ചെയ്യുന്നു ✨
