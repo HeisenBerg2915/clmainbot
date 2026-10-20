@@ -937,7 +937,7 @@ async def auto_filter(client, msg, spoll=False):
     reply_markup = InlineKeyboardMarkup(btn)
 
     try:
-        poster = await asyncio.wait_for(get_poster(search), timeout=10)
+        poster = await asyncio.wait_for(get_omdb_poster(search))
     except Exception:
         poster = None
 
