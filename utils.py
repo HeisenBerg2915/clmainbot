@@ -70,36 +70,38 @@ def _parse_api_keys(keys_config):
 
 async def get_imdb_poster(movie_name):
     try:
-        from imdb import Cinemagoer
+        if not IMDBIO_AVAILABLE: return None
         query = movie_name.strip()
         year_match = re.search(r'\b(19\d{2}|20\d{2})\b', query)
         year = int(year_match.group(1)) if year_match else None
         title = re.sub(r'\s*\b(19\d{2}|20\d{2})\b\s*', ' ', query).strip()
-        normalize = lambda s: re.sub(r'[^a-z0-9]', '', (s or '').lower())
         if not title: return None
 
         def search_movie():
-            ia = Cinemagoer()
-            results = ia.search_movie(title)
-            for movie in results[:10]:
-                if normalize(movie.get('title')) != normalize(title): continue
-                if year and movie.get('year') != year: continue
-                try:
-                    ia.update(movie, ['main'])
-                    poster = movie.get('full-size cover url') or movie.get('cover url')
-                    if poster: return poster
-                except Exception:
-                    continue
-            return None
+            return _imdbio.search_title(title, year=year)
 
-        return await asyncio.wait_for(
-            asyncio.to_thread(search_movie), timeout=10
-        )
+        results = await asyncio.wait_for(asyncio.to_thread(search_movie), timeout=5)
+        if not results: return None
+
+        def normalize(s):
+            return re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+        for movie in results[:10]:
+            name = getattr(movie, "title", None) or (movie.get("title") if isinstance(movie, dict) else None)
+            movie_year = getattr(movie, "year", None) or (movie.get("year") if isinstance(movie, dict) else None)
+            if not name or normalize(name) != normalize(title): continue
+            if year and movie_year and int(movie_year) != year: continue
+            imdb_id = getattr(movie, "imdb_id", None) or (movie.get("imdb_id") if isinstance(movie, dict) else None)
+            if not imdb_id: continue
+            details = await asyncio.wait_for(asyncio.to_thread(_imdbio_get_details, imdb_id), timeout=5)
+            if isinstance(details, dict):
+                poster = details.get("poster") or details.get("image") or details.get("cover_url")
+                if poster and poster.startswith("http"): return poster
+        return None
     except asyncio.CancelledError:
         raise
     except Exception:
         return None
-
 
 async def get_tmdb_poster(movie_name, tmdb_api_key):
     try:
@@ -113,7 +115,7 @@ async def get_tmdb_poster(movie_name, tmdb_api_key):
             return None
 
         headers = {"Accept": "application/json"}
-        timeout = aiohttp.ClientTimeout(total=5)
+        timeout = aiohttp.ClientTimeout(total=10)
 
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
             url = "https://api.themoviedb.org/3/search/multi"
@@ -185,7 +187,7 @@ async def get_omdb_poster(movie_name, omdb_api_key):
         params = {"apikey": omdb_api_key, "t": title, "type": "movie"}
         if year:
             params["y"] = year
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.get("https://www.omdbapi.com/", params=params) as response:
                 if response.status != 200:
                     return None
@@ -210,7 +212,7 @@ async def get_any_movie_poster(movie_name):
     if cached_poster: return cached_poster
     current_time = time.time()
     try:
-        poster = await asyncio.wait_for(get_imdb_poster(movie_name), timeout=5.0)
+        poster = await asyncio.wait_for(get_imdb_poster(movie_name), timeout=10)
         if poster:
             await save_poster_to_cache(movie_name, poster)
             return poster
@@ -222,7 +224,7 @@ async def get_any_movie_poster(movie_name):
         if valid_tmdb_keys:
             chosen_key = random.choice(valid_tmdb_keys)
             try:
-                poster = await asyncio.wait_for(get_tmdb_poster(movie_name, chosen_key), timeout=3.0)
+                poster = await asyncio.wait_for(get_tmdb_poster(movie_name, chosen_key), timeout=10)
                 if poster:
                     await save_poster_to_cache(movie_name, poster)
                     return poster
@@ -234,7 +236,7 @@ async def get_any_movie_poster(movie_name):
         if valid_omdb_keys:
             chosen_key = random.choice(valid_omdb_keys)
             try:
-                poster = await asyncio.wait_for(get_omdb_poster(movie_name, chosen_key), timeout=3.0)
+                poster = await asyncio.wait_for(get_omdb_poster(movie_name, chosen_key), timeout=10)
                 if poster:
                     await save_poster_to_cache(movie_name, poster)
                     return poster
